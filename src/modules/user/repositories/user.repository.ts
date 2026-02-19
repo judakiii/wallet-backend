@@ -10,12 +10,10 @@ export class UserRepository extends BaseRepository<User> {
     super(prisma, 'user');
   }
 
-  // Custom method: Find by email
   async findByEmail(email: string): Promise<User | null> {
     return this.findOne({ email });
   }
 
-  // Custom method: Find active users
   async findActiveUsers(): Promise<User[]> {
     return this.findAll({
       where: { isActive: true },

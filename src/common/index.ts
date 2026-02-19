@@ -1,3 +1,5 @@
 export * from "./interfaces"
 export * from "./repositories"
 export * from "./unit-of-work"
+export * from "./middleware"
+export * from "./decoratores"
