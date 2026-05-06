@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { UserSchema } from './user.schema';
 
-export const NotificationTypeEnum = z.enum(['TRANSACTION', 'WALLET_ALERT', 'SECURITY', 'SYSTEM']);
+export const NotificationTypeEnum = z.enum([
+  'TRANSACTION',
+  'WALLET_ALERT',
+  'SECURITY',
+  'SYSTEM',
+]);
 export const NotificationStatusEnum = z.enum(['UNREAD', 'READ', 'ARCHIVED']);
 
 export type NotificationType = z.infer<typeof NotificationTypeEnum>;
@@ -40,6 +45,8 @@ export const UpdateNotificationSchema = NotificationSchema.omit({
 }).partial();
 
 export type Notification = z.infer<typeof NotificationSchema>;
-export type NotificationWithRelations = z.infer<typeof NotificationWithRelationsSchema>;
+export type NotificationWithRelations = z.infer<
+  typeof NotificationWithRelationsSchema
+>;
 export type CreateNotificationDto = z.infer<typeof CreateNotificationSchema>;
 export type UpdateNotificationDto = z.infer<typeof UpdateNotificationSchema>;

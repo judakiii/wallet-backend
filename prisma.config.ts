@@ -1,10 +1,13 @@
-import { ConfigService } from "@nestjs/config";
-import { defineConfig } from "prisma/config";
+import { defineConfig } from 'prisma/config';
+import * as dotenv from 'dotenv';
 
-const configService = new ConfigService()
+dotenv.config();
 
 export default defineConfig({
   datasource: {
-      url: configService.get<string>('DATABASE_URL') || "postgresql://mohammadreza:aa110110@localhost:5432/wallet_db?schema=public"
+    url:
+      process.env.DATABASE_URL ||
+      'postgresql://mohammadreza:aa110110@localhost:5432/wallet_db?schema=public',
   },
+  engine: 'classic',
 });

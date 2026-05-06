@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 /**
  * Email Schema
@@ -9,8 +9,7 @@ export const emailSchema = z
   .string()
   .trim()
   .toLowerCase()
-  .email("Invalid email format");
-
+  .email('Invalid email format');
 
 /**
  * Password Schema (strong default)
@@ -22,13 +21,12 @@ export const emailSchema = z
  */
 export const passwordSchema = z
   .string()
-  .min(8, "Password must be at least 8 characters")
-  .max(64, "Password too long")
-  .regex(/[A-Z]/, "Must contain at least one uppercase letter")
-  .regex(/[a-z]/, "Must contain at least one lowercase letter")
-  .regex(/[0-9]/, "Must contain at least one number")
-  .regex(/[^A-Za-z0-9]/, "Must contain at least one special character");
-
+  .min(8, 'Password must be at least 8 characters')
+  .max(64, 'Password too long')
+  .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Must contain at least one number')
+  .regex(/[^A-Za-z0-9]/, 'Must contain at least one special character');
 
 /**
  * Name Schema
@@ -39,6 +37,18 @@ export const passwordSchema = z
 export const nameSchema = z
   .string()
   .trim()
-  .min(2, "Name too short")
-  .max(50, "Name too long")
-  .regex(/^[A-Za-z\s]+$/, "Name can only contain letters and spaces");
+  .min(2, 'Name too short')
+  .max(50, 'Name too long')
+  .regex(/^[A-Za-z\s]+$/, 'Name can only contain letters and spaces');
+
+/**
+ * Iranian Phone Schema
+ * Accepts:
+ * 09123456789
+ * 989123456789
+ * +989123456789
+ */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^(?:\+98|98|0)?9\d{9}$/, 'Invalid Iranian phone number');

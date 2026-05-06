@@ -1,48 +1,79 @@
-import { ConflictException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
-import { UserRepository } from "../user/repositories";
-import { WalletRepository } from "../wallet/repositories";
-import { UnitOfWorkFactory } from "src/common";
-import { JwtService } from "@nestjs/jwt";
-import { ConfigService } from "@nestjs/config";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { UserRepository } from '../user/repositories';
+import { WalletRepository } from '../wallet/repositories';
+import { UnitOfWorkFactory } from 'src/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { AuthResponseDto, LoginDto, RegisterDto } from "./dto";
+import { AuthResponseDto, LoginDto, RegisterDto, VerifyOtpDto } from './dto';
+import { RefreshTokenRepositories } from './repositories';
+import { Request, Response } from 'express';
+import { randomUUID } from 'crypto';
+import { RedisService } from 'src/redis';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class AuthService {
-    private readonly logger = new Logger(AuthService.name);
-    constructor(
+  private readonly logger = new Logger(AuthService.name);
+  constructor(
     private readonly userRepository: UserRepository,
     private readonly walletRepository: WalletRepository,
+    private readonly refreshTokenRepository: RefreshTokenRepositories,
     private readonly uowFactory: UnitOfWorkFactory,
     private readonly jwtService: JwtService,
+    private readonly notificationService: NotificationService,
     private readonly configService: ConfigService,
-    ) {}
-    
-/**
-   * Register new user with automatic wallet creation
-   */
-  async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
-    this.logger.log(`Registering new user: ${registerDto.email}`);
+    private readonly redis: RedisService,
+  ) {}
+
+  async register(body: RegisterDto, res: Response): Promise<AuthResponseDto> {
+    this.logger.log(`Registering new user: ${body.identifier}`);
+
+    const isRegisterByEmail = body.identifier.includes('@');
+    let newUserSchema = {};
 
     const uow = this.uowFactory.create();
 
     const result = await uow.execute(async () => {
-      // Check if email already exists
-      const emailExists = await this.userRepository.exists(registerDto.email);
-      if (emailExists) {
-        throw new ConflictException('Email already exists');
+      // Hash password
+      const hashedPassword = await bcrypt.hash(body.password, 10);
+      if (isRegisterByEmail) {
+        // Check if email already exists
+        const emailExists = await this.userRepository.exists({
+          where: {
+            email: body.identifier,
+          },
+        });
+        console.log('LLLLLLLLLLLLLLLLL : ', emailExists);
+        if (emailExists) {
+          throw new ConflictException('Email already exists');
+        }
+        newUserSchema = {
+          email: body.identifier,
+          password: hashedPassword,
+        };
+      } else {
+        // Check if phone already exists
+        const phoneExists = await this.userRepository.exists({
+          phone: body.identifier,
+        });
+        if (phoneExists) {
+          throw new ConflictException('Phone already exists');
+        }
+        newUserSchema = {
+          phone: body.identifier,
+          password: hashedPassword,
+        };
       }
 
-      // Hash password
-      const hashedPassword = await bcrypt.hash(registerDto.password, 10);
-
       // Create user
-      const user = await this.userRepository.create({
-        email: registerDto.email,
-        password: hashedPassword,
-        name: registerDto.name,
-      });
-
+      const user = await this.userRepository.create(newUserSchema);
       this.logger.log(`User created: ${user.id}`);
 
       // Create wallet for user
@@ -57,29 +88,31 @@ export class AuthService {
       return { user, wallet };
     });
 
-    // Generate tokens
-    const tokens = await this.generateTokens(result.user.id, result.user.email);
+    const tokens = await this.generateTokens(result.user.id);
+
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: false,
+      secure: false,
+      sameSite: 'strict',
+      path: '/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     return {
-      ...tokens,
-      user: {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
-      },
+      accessToken: tokens.accessToken,
+      message: 'Register was Successfully',
     };
   }
 
-   /**
-   * Login user
-   */
-  async login(loginDto: LoginDto): Promise<AuthResponseDto> {
-    this.logger.log(`Login attempt for: ${loginDto.email}`);
+  async login(body: LoginDto, res: Response): Promise<AuthResponseDto> {
+    this.logger.log(`Login attempt for: ${body.identifier}`);
 
-    // Find user by email
-    const user = await this.userRepository.findByEmail(loginDto.email);
+    // Find user by identifier
+    const user = await this.userRepository.findByIdentifier({
+      identifier: body.identifier,
+    });
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('User Not Found!');
     }
 
     // Check if user is active
@@ -87,27 +120,230 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
+    // Compare passwords
+    const isPasswordValid = await bcrypt.compare(body.password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Password is incorrect');
+    }
+
     this.logger.log(`User logged in: ${user.id}`);
 
     // Generate tokens
-    const tokens = await this.generateTokens(user.id, user.email);
+    const tokens = await this.generateTokens(user.id);
+
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: false,
+      secure: false,
+      sameSite: 'strict',
+      path: '/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
 
     return {
-      ...tokens,
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
+      accessToken: tokens.accessToken,
+      message: 'Login was Successfully',
     };
   }
 
-  /**
-   * Validate user by ID (used by JWT strategy)
-   */
-  async validateUser(userId: string) {
-    const user = await this.userRepository.findById(userId);
-    
+  async logout(req: Request, res: Response, userId: string) {
+    // 1. Read refresh token from cookie
+    const refreshToken = req.cookies['refresh_token'];
+
+    if (refreshToken) {
+      await this.refreshTokenRepository.softDeleteRefreshToken({
+        where: {
+          userId,
+        },
+      });
+    }
+
+    // // 2. Read access token from Authorization header
+    const authHeader = req.headers['authorization'];
+    const accessToken = authHeader?.split(' ')[1];
+
+    if (accessToken) {
+      const decoded: any = this.jwtService.decode(accessToken);
+
+      if (decoded?.jti) {
+        // 3. Blacklist access token via Redis
+        await this.redis.setCacheTtl(
+          `blackList:${decoded.jti}`,
+          'revoked',
+          60 * 1,
+        );
+      }
+    }
+
+    // 4. Clear Refresh Token Cookie
+    res.clearCookie('refresh_token', {
+      httpOnly: false,
+      secure: false,
+      sameSite: 'strict',
+      path: '/auth/refresh',
+    });
+
+    return { message: 'Logged out successfully' };
+  }
+
+  async sendOtp(phone: string, res: Response) {
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtpCode = await bcrypt.hash(otpCode, 5);
+    this.redis.setCacheTtl(`phone:${phone}`, hashedOtpCode, 2 * 60);
+    await this.notificationService.sendSms(phone, otpCode);
+
+    return { message: 'send Otp SuccessFully' };
+  }
+
+  async verifyByOtp(body: VerifyOtpDto, res: Response) {
+    const isRegisterByEmail = body.identifier.includes('@');
+    const otpCode = await this.redis.getCache(
+      isRegisterByEmail
+        ? `email:${body.identifier}`
+        : `phone:${body.identifier}`,
+    );
+
+    if (!otpCode) throw new BadRequestException('OTP Code is Was Expired');
+
+    const isValidOtpCode = await bcrypt.compare(body.code, otpCode);
+    if (!isValidOtpCode) throw new BadRequestException('OTP Code is Wrong');
+
+    const uow = this.uowFactory.create();
+    const result = await uow.execute(async () => {
+      const res = await this.userRepository.upsert({
+        where: {
+          OR: [{ phone: body.identifier }, { email: body.identifier }],
+        },
+        create: {
+          ...(isRegisterByEmail
+            ? { email: body.identifier }
+            : { phone: body.identifier }),
+        },
+        update: {
+          ...(isRegisterByEmail
+            ? { email: body.identifier }
+            : { phone: body.identifier }),
+        },
+      });
+
+      if (res.isNew) {
+        // Create wallet for user
+        const wallet = await this.walletRepository.create({
+          userId: res.user.id,
+          balance: 0,
+          currency: 'USD',
+        });
+
+        this.logger.log(`Wallet created for user: ${wallet.id}`);
+      }
+
+      return res;
+    });
+
+    const tokens = await this.generateTokens(result.user.id);
+
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: false,
+      secure: false,
+      sameSite: 'strict',
+      path: '/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return {
+      accessToken: tokens.accessToken,
+      message: `${result.isNew ? 'SignUp' : 'Login'} Was Successfully`,
+    };
+  }
+
+  async generateTokens(userId: string) {
+    const accessToken = this.jwtService.sign(
+      { sub: userId, jti: randomUUID() },
+      {
+        expiresIn: this.configService.get('JWT_EXPIRES_IN'),
+        secret: this.configService.get('JWT_SECRET'),
+      },
+    );
+
+    const refreshToken = this.jwtService.sign(
+      { sub: userId },
+      {
+        expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN'),
+        secret: this.configService.get('JWT_REFRESH_SECRET'),
+      },
+    );
+
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+
+    await this.refreshTokenRepository.create({
+      userId,
+      tokenHash: hashedRefreshToken,
+      expiresAt: new Date(new Date().setDate(new Date().getDate() + 7)),
+    });
+
+    return { accessToken, refreshToken };
+  }
+
+  async refreshToken(
+    req: Request,
+    res: Response,
+  ): Promise<{ accessToken: string }> {
+    const refreshToken = req.cookies['refresh_token'];
+
+    if (!refreshToken) throw new UnauthorizedException();
+
+    // Verify refresh token
+    const payload = await this.jwtService.verifyAsync(refreshToken, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+    });
+
+    const refreshTokenRecord = await this.refreshTokenRepository.findOne({
+      where: {
+        userId: payload.sub,
+        revoked: false,
+      },
+    });
+
+    if (!refreshTokenRecord)
+      throw new UnauthorizedException('Refresh Token Is not Active');
+
+    const compareTokens = await bcrypt.compare(
+      refreshToken,
+      refreshTokenRecord.tokenHash,
+    );
+
+    if (!compareTokens) {
+      throw new UnauthorizedException('Refresh Token does not match');
+    }
+
+    await this.refreshTokenRepository.updateMany({
+      where: {
+        userId: payload.sub,
+        revoked: false,
+      },
+      data: {
+        revoked: true,
+      },
+    });
+
+    const tokens = await this.generateTokens(payload.sub);
+
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: false,
+      secure: false,
+      sameSite: 'strict',
+      path: '/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return { accessToken: tokens.accessToken };
+  }
+
+  async validateUser(payload: any) {
+    const user = await this.userRepository.findById(payload.sub);
+    const checkBlackList = await this.redis.getCache(
+      `blackList:${payload.jti}`,
+    );
+
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
@@ -116,85 +352,14 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-    };
-  }
-
-    /**
-   * Generate access and refresh tokens
-   */
-  private async generateTokens(userId: string, email: string) {
-    const payload = { sub: userId, email };
-
-    const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m') as any,
-      }),
-      this.jwtService.signAsync(payload, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-        expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d') as any,
-      }),
-    ]);
-
-    return {
-      accessToken,
-      refreshToken,
-    };
-  }
-
-   /**
-   * Refresh access token using refresh token
-   */
-  async refreshToken(refreshToken: string): Promise<{ accessToken: string }> {
-    try {
-      // Verify refresh token
-      const payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      });
-
-      // Generate new access token
-      const accessToken = await this.jwtService.signAsync(
-        { sub: payload.sub, email: payload.email },
-        {
-          secret: this.configService.get<string>('JWT_SECRET'),
-          expiresIn: this.configService.get<string>('JWT_EXPIRES_IN', '15m') as any,
-        },
-      );
-
-      return { accessToken };
-    } catch (error) {
-      throw new UnauthorizedException('Invalid refresh token');
-    }
-  }
-
-   /**
-   * Get user profile
-   */
-  async getProfile(userId: string) {
-    const user = await this.userRepository.findOne(userId , {include : { wallet: true }});
-    
-    if (!user) {
-      throw new UnauthorizedException('User not found');
+    if (payload.jti && checkBlackList) {
+      throw new UnauthorizedException('Please Login Again');
     }
 
     return {
       id: user.id,
       email: user.email,
-      name: user.name,
-      isActive: user.isActive,
-      createdAt: user.createdAt,
-      // wallet: user.wallet
-      //   ? {
-      //       id: user.wallet.id,
-      //       balance: Number(user.wallet.balance),
-      //       currency: user.wallet.currency,
-      //     }
-      //   : null,
+      phone: user.phone,
     };
   }
-
 }

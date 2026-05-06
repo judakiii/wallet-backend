@@ -1,15 +1,32 @@
 import { z } from 'zod';
-import { nameSchema , emailSchema , passwordSchema } from 'src/common/schema';
+import { emailSchema, passwordSchema, phoneSchema } from 'src/common/schema';
 
 export const RegisterSchema = z.object({
-  email: emailSchema,
+  identifier: z.union([phoneSchema, emailSchema]),
   password: passwordSchema,
-  name: nameSchema,
 });
 
 export const LoginSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema
+  identifier: z.union([phoneSchema, emailSchema]),
+  password: passwordSchema,
+});
+
+// Refresh token input schema
+export const RefreshTokenSchema = z.object({
+  refreshToken: z.string({
+    error: 'Refresh token is required',
+  }),
+});
+
+// Refresh token input schema
+export const SendOtpSchema = z.object({
+  identifier: z.union([phoneSchema, emailSchema]),
+});
+
+// Refresh token input schema
+export const VerifyOtpSchema = z.object({
+  identifier: z.union([phoneSchema, emailSchema]),
+  code: z.string().max(6),
 });
 
 // User response schema
@@ -22,8 +39,7 @@ export const UserResponseSchema = z.object({
 // Auth response schema
 export const AuthResponseSchema = z.object({
   accessToken: z.string(),
-  refreshToken: z.string(),
-  user: UserResponseSchema,
+  message: z.string(),
 });
 
 // Token response schema
@@ -32,15 +48,10 @@ export const TokenResponseSchema = z.object({
   refreshToken: z.string(),
 });
 
-// Refresh token input schema
-export const RefreshTokenSchema = z.object({
-  refreshToken: z.string({
-    error: 'Refresh token is required',
-  }),
-});
-
 export type RegisterDto = z.infer<typeof RegisterSchema>;
 export type LoginDto = z.infer<typeof LoginSchema>;
+export type SendOtpDto = z.infer<typeof SendOtpSchema>;
+export type VerifyOtpDto = z.infer<typeof VerifyOtpSchema>;
 export type AuthResponseDto = z.infer<typeof AuthResponseSchema>;
 export type TokenResponseDto = z.infer<typeof TokenResponseSchema>;
 export type RefreshTokenDto = z.infer<typeof RefreshTokenSchema>;

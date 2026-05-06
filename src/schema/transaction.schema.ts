@@ -1,8 +1,17 @@
 import { z } from 'zod';
 import { WalletSchema } from './wallet.schema';
 
-export const TransactionTypeEnum = z.enum(['DEPOSIT', 'WITHDRAWAL', 'TRANSFER']);
-export const TransactionStatusEnum = z.enum(['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED']);
+export const TransactionTypeEnum = z.enum([
+  'DEPOSIT',
+  'WITHDRAWAL',
+  'TRANSFER',
+]);
+export const TransactionStatusEnum = z.enum([
+  'PENDING',
+  'COMPLETED',
+  'FAILED',
+  'CANCELLED',
+]);
 
 export type TransactionType = z.infer<typeof TransactionTypeEnum>;
 export type TransactionStatus = z.infer<typeof TransactionStatusEnum>;
@@ -44,6 +53,8 @@ export const UpdateTransactionSchema = TransactionSchema.omit({
 }).partial();
 
 export type Transaction = z.infer<typeof TransactionSchema>;
-export type TransactionWithRelations = z.infer<typeof TransactionWithRelationsSchema>;
+export type TransactionWithRelations = z.infer<
+  typeof TransactionWithRelationsSchema
+>;
 export type CreateTransactionDto = z.infer<typeof CreateTransactionSchema>;
 export type UpdateTransactionDto = z.infer<typeof UpdateTransactionSchema>;

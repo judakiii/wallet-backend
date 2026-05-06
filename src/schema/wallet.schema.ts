@@ -5,7 +5,7 @@ import { TransactionSchema } from './transaction.schema';
 export const WalletSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
-  balance: z.number().nonnegative(),
+  balance: z.any(),
   currency: z.string().default('USD'),
   version: z.number().int().nonnegative().default(0),
   isActive: z.boolean().default(true),
