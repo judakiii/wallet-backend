@@ -11,11 +11,13 @@ datasource db {
 }
 
 model User {
-  id       String  @id @default(uuid())
-  email    String? @unique
-  phone    String? @unique
+  id       String     @id @default(uuid())
+  email    String?    @unique
+  phone    String?    @unique
   password String?
-  isActive Boolean @default(true)
+  avatar   String?
+  role     MemberRole @default(MEMBER)
+  isActive Boolean    @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -99,6 +101,9 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  type  ConversationType @default(TICKET)
+  title String
+
   lastMessageId String?
   lastMessageAt DateTime?
 
@@ -131,7 +136,6 @@ model Message {
   conversationId String
   senderId       String
 
-  type    MessageType @default(TEXT)
   content String?
 
   createdAt DateTime @default(now())
@@ -156,7 +160,7 @@ model MessageAttachment {
 
   url      String
   fileName String?
-  mimeType String?
+  fileType String?
   size     Int?
 
   createdAt DateTime @default(now())
@@ -181,15 +185,30 @@ model MessageReaction {
   @@unique([messageId, userId, emoji])
 }
 
-enum MessageType {
-  TEXT
-  IMAGE
-  FILE
-  SYSTEM
+/////// ATTACHMENT ///////
+model Attachment {
+  id        String   @id @default(uuid())
+  url       String // public URL for front
+  key       String // Object Storage (avatars/user-123/abc.png)
+  fileName  String
+  mimeType  String
+  size      Int
+  createdAt DateTime @default(now())
+}
+
+enum ConversationType {
+  TICKET
+  DIRECT
+  GROUP
+  // TEXT
+  // IMAGE
+  // FILE
+  // SYSTEM
 }
 
 enum MemberRole {
   MEMBER
+  SUPPORTER
   ADMIN
 }
 

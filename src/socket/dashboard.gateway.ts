@@ -1,3 +1,4 @@
+import { UseGuards } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -7,14 +8,19 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { CurrentUser, type CurrentUserDto } from 'src/common';
+import { WsJwtAuthGuard } from 'src/common/guard/wsJwt.guard';
+import { JwtAuthGuard } from 'src/modules/auth/jwt.guard';
+import { PrismaService } from 'src/prisma';
 
+@UseGuards(WsJwtAuthGuard)
 @WebSocketGateway({
   cors: { origin: '*' },
 })
 export class DashboardGateway implements OnGatewayInit {
+  constructor(private readonly prisma: PrismaService) {}
   @WebSocketServer()
   server: Server;
-
   private interval;
 
   sendGlobalMessage() {
@@ -102,84 +108,93 @@ export class DashboardGateway implements OnGatewayInit {
     return { status: 'sent' };
   }
 
-  // @SubscribeMessage('joinConversation')
-  // async handleJoinConv(
-  //   @MessageBody() payload: { conversationId: string },
-  //   @ConnectedSocket() client: Socket,
-  // ) {
-  //   client.join(payload.conversationId);
+  ///////////////////////////////////////////////////////////////////////////////////////// chat section \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+  @SubscribeMessage('joinConversation')
+  async handleJoinConv(
+    @MessageBody() payload: { conversationId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.join(payload.conversationId);
 
-  //   return { status: 'joined' };
-  // }
+    return { status: 'joined' };
+  }
 
-  // @SubscribeMessage('sendMessage')
-  // async handleSendMessage(
-  //   @MessageBody()
-  //   payload: { conversationId: string; content: string; type: MessageType },
-  //   @ConnectedSocket() client: Socket,
-  // ) {
-  //   const senderId = client.data.userId;
+  @SubscribeMessage('sendMessage')
+  async handleSendMessage(
+    @CurrentUser() user: CurrentUserDto,
+    @MessageBody()
+    payload: { conversationId: string; content: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const senderId = user.id;
 
-  //   // 1) پیام را در DB بساز
-  //   const message = await this.prisma.message.create({
-  //     data: {
-  //       conversationId: payload.conversationId,
-  //       senderId,
-  //       content: payload.content,
-  //       type: payload.type,
-  //     },
-  //   });
+    // 1) پیام را در DB بساز
+    const message = await this.prisma.message.create({
+      data: {
+        conversationId: payload.conversationId,
+        senderId,
+        content: payload.content,
+      },
+    });
 
-  //   // 2) Conversation را برای lastMessage آپدیت کن
-  //   await this.prisma.conversation.update({
-  //     where: { id: payload.conversationId },
-  //     data: {
-  //       lastMessageId: message.id,
-  //       lastMessageAt: new Date(),
-  //     },
-  //   });
+    // 2) Conversation را برای lastMessage آپدیت کن
+    await this.prisma.conversation.update({
+      where: { id: payload.conversationId },
+      data: {
+        lastMessageId: message.id,
+        lastMessageAt: new Date(),
+      },
+    });
 
-  //   // 3) پیام را برای کل اعضای Room بفرست
-  //   this.server.to(payload.conversationId).emit('message', {
-  //     id: message.id,
-  //     conversationId: payload.conversationId,
-  //     senderId,
-  //     content: payload.content,
-  //     type: payload.type,
-  //     createdAt: message.createdAt,
-  //   });
+    await this.prisma.conversationMember.updateMany({
+      where: {
+        conversationId: payload.conversationId,
+        userId: { not: senderId },
+      },
+      data: { unreadCount: { increment: 1 } },
+    });
 
-  //   return { status: 'sent' };
-  // }
+    // 3) پیام را برای کل اعضای Room بفرست
+    this.server.to(payload.conversationId).emit('message', {
+      id: message.id,
+      conversationId: payload.conversationId,
+      senderId,
+      content: payload.content,
+      createdAt: message.createdAt,
+    });
 
-  // @SubscribeMessage('markAsRead')
-  // async markAsRead(
-  //   @MessageBody() payload: { conversationId: string },
-  //   @ConnectedSocket() client: Socket,
-  // ) {
-  //   await this.prisma.conversationMember.update({
-  //     where: {
-  //       conversationId_userId: {
-  //         conversationId: payload.conversationId,
-  //         userId: client.data.userId,
-  //       },
-  //     },
-  //     data: { unreadCount: 0 },
-  //   });
-  // }
+    return { status: 'sent' };
+  }
 
-  // @SubscribeMessage('loadMessages')
-  // async loadMessages(
-  //   @MessageBody() payload: { conversationId: string; cursor?: string },
-  // ) {
-  //   return this.prisma.message.findMany({
-  //     where: { conversationId: payload.conversationId },
-  //     take: 30,
-  //     orderBy: { createdAt: 'desc' },
-  //     cursor: payload.cursor ? { id: payload.cursor } : undefined,
-  //     skip: payload.cursor ? 1 : 0,
-  //   });
-  // }
+  @SubscribeMessage('markAsRead')
+  async markAsRead(
+    @MessageBody() payload: { conversationId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    await this.prisma.conversationMember.update({
+      where: {
+        conversationId_userId: {
+          conversationId: payload.conversationId,
+          userId: client.data.userId,
+        },
+      },
+      data: { unreadCount: 0 },
+    });
+  }
+
+  @SubscribeMessage('loadMessages')
+  async loadMessages(
+    @MessageBody() payload: { conversationId: string; cursor?: string },
+  ) {
+    return this.prisma.message.findMany({
+      where: { conversationId: payload.conversationId },
+      take: 30,
+      orderBy: { createdAt: 'desc' },
+      cursor: payload.cursor ? { id: payload.cursor } : undefined,
+      skip: payload.cursor ? 1 : 0,
+      include: { reactions: true },
+    });
+  }
 
   afterInit() {
     console.log('Dashboard WebSocket initialized');

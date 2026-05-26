@@ -15,6 +15,11 @@ import { UserModule } from './modules/user/user.module';
 import { DashboardGateway } from './socket/dashboard.gateway';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TransactionModule } from './modules/transaction/transaction.module';
+import { ConversationModule } from './modules/conversation/conversation.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+import { AttachmentsModuleV1 } from './modules/attachments/v1/attachments.v1.module';
+import { AttachmentsModuleV2 } from './modules/attachments/v2/attachments.v2.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -26,6 +31,13 @@ import { TransactionModule } from './modules/transaction/transaction.module';
         limit: 10,
       },
     ]),
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+      serveStaticOptions: {
+        fallthrough: false,
+      },
+    }),
     ScheduleModule.forRoot(),
     RedisModule,
     PrismaModule,
@@ -35,6 +47,9 @@ import { TransactionModule } from './modules/transaction/transaction.module';
     WalletModule,
     UserModule,
     TransactionModule,
+    ConversationModule,
+    AttachmentsModuleV1,
+    AttachmentsModuleV2,
   ],
   controllers: [AppController],
   providers: [
