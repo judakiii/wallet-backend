@@ -1,0 +1,19 @@
+{
+  "internalServerError": "خطای داخلی سرور",
+  "indentifier": "ایمیل یا شماره تلفن الزامی است",
+  "database": "خطای پایگاه داده",
+  "recordNotFound": "رکورد پیدا نشد",
+  "duplicated": "رکورد تکراری است",
+  "accessDenied": "دسترسی غیرمجاز",
+  "userRegistered": "کاربر ثبت شد",
+  "notFound": "یافت نشد",
+  "passwordNotMatch": "کلمه‌های عبور یکسان نیستند",
+  "invalidEmail": "ایمیل نامعتبر است",
+  "passwordTooShort": "رمز عبور خیلی کوتاه است",
+  "passwordTooLong": "رمز عبور خیلی بلند است",
+  "phoneRequired": "شماره تلفن الزامی است",
+  "nationalityRequired": "ملیت الزامی است",
+  "phoneTooShort": "شماره تلفن خیلی کوتاه است",
+  "creditcardTooShort": "شماره کارت اعتباری خیلی کوتاه است",
+  "invalidRole": "نقش نامعتبر است"
+}

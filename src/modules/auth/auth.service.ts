@@ -10,13 +10,13 @@ import { WalletRepository } from '../wallet/repositories';
 import { UnitOfWorkFactory } from 'src/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { AuthResponseDto, LoginDto, RegisterDto, VerifyOtpDto } from './dto';
 import { RefreshTokenRepositories } from './repositories';
 import { Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { RedisService } from 'src/redis';
 import { NotificationService } from '../notification/notification.service';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -50,7 +50,7 @@ export class AuthService {
             email: body.identifier,
           },
         });
-        console.log('LLLLLLLLLLLLLLLLL : ', emailExists);
+
         if (emailExists) {
           throw new ConflictException('Email already exists');
         }
@@ -99,8 +99,8 @@ export class AuthService {
     });
 
     return {
-      accessToken: tokens.accessToken,
-      message: 'Register was Successfully',
+      data: { accessToken: tokens.accessToken, expiresIn: 5 * 60 * 1000 },
+      message: 'common.signUpSuccessfully',
     };
   }
 
@@ -140,8 +140,8 @@ export class AuthService {
     });
 
     return {
-      accessToken: tokens.accessToken,
-      message: 'Login was Successfully',
+      data: { accessToken: tokens.accessToken, expiresIn: 5 * 60 * 1000 },
+      message: 'common.loginSuccessfully',
     };
   }
 
@@ -182,7 +182,7 @@ export class AuthService {
       path: '/auth/refresh',
     });
 
-    return { message: 'Logged out successfully' };
+    return { message: 'common.logoutSuccessfully' };
   }
 
   async sendOtp(phone: string, res: Response) {
@@ -191,7 +191,7 @@ export class AuthService {
     this.redis.setCacheTtl(`phone:${phone}`, hashedOtpCode, 2 * 60);
     await this.notificationService.sendSms(phone, otpCode);
 
-    return { message: 'send Otp SuccessFully' };
+    return { message: 'common.otpSent' };
   }
 
   async verifyByOtp(body: VerifyOtpDto, res: Response) {
@@ -251,7 +251,7 @@ export class AuthService {
 
     return {
       accessToken: tokens.accessToken,
-      message: `${result.isNew ? 'SignUp' : 'Login'} Was Successfully`,
+      message: `common.${result.isNew ? 'signUp' : 'login'}Successfully`,
     };
   }
 
@@ -286,7 +286,10 @@ export class AuthService {
   async refreshToken(
     req: Request,
     res: Response,
-  ): Promise<{ accessToken: string }> {
+  ): Promise<{
+    data: { accessToken: string; expiresIn: number };
+    message: string;
+  }> {
     const refreshToken = req.cookies['refresh_token'];
 
     if (!refreshToken) throw new UnauthorizedException();
@@ -335,7 +338,10 @@ export class AuthService {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return { accessToken: tokens.accessToken };
+    return {
+      data: { accessToken: tokens.accessToken, expiresIn: 5 * 60 * 1000 },
+      message: 'common.loginSuccessfully',
+    };
   }
 
   async validateUser(payload: any) {

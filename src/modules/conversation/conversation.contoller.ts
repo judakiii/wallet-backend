@@ -42,8 +42,15 @@ export class ConversationController {
   }
 
   @Get('/messages/:id')
-  findConversationMessages(@Param('id') id: string) {
-    return this.conversationService.findConversationMessages(id);
+  findConversationMessages(
+    @Param('id') id: string,
+    @Query('cursor') cursor: string,
+    @Query('limit') limit: number,
+  ) {
+    return this.conversationService.findConversationMessages(id, {
+      cursor,
+      limit,
+    });
   }
 
   @Patch('/messages/:id')

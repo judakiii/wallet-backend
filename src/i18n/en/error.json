@@ -1,0 +1,19 @@
+{
+  "internalServerError": "Internal Server Error",
+  "indentifier": "Either email or phone is required",
+  "database": "Database Error",
+  "recordNotFound": "Record Not Found",
+  "duplicated": "Duplicate Record",
+  "accessDenied": "Access Denied",
+  "userRegistered": "User Registered",
+  "notFound": "Not Found",
+  "passwordNotMatch": "Passwords Do Not Match",
+  "invalidEmail": "Invalid Email Address",
+  "passwordTooShort": "Password Too Short",
+  "passwordTooLong": "Password Too Long",
+  "phoneRequired": "Phone Number Is Required",
+  "nationalityRequired": "Nationality Is Required",
+  "phoneTooShort": "Phone Number Too Short",
+  "creditcardTooShort": "Credit Card Number Too Short",
+  "invalidRole": "Invalid Role"
+}

@@ -38,7 +38,7 @@ export const UserResponseSchema = z.object({
 
 // Auth response schema
 export const AuthResponseSchema = z.object({
-  accessToken: z.string(),
+  data: { accessToken: z.string() },
   message: z.string(),
 });
 

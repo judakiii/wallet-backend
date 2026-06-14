@@ -17,9 +17,10 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { TransactionModule } from './modules/transaction/transaction.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
+import path, { join } from 'path';
 import { AttachmentsModuleV1 } from './modules/attachments/v1/attachments.v1.module';
 import { AttachmentsModuleV2 } from './modules/attachments/v2/attachments.v2.module';
+import { AcceptLanguageResolver, I18nModule } from 'nestjs-i18n';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -37,6 +38,16 @@ import { AttachmentsModuleV2 } from './modules/attachments/v2/attachments.v2.mod
       serveStaticOptions: {
         fallthrough: false,
       },
+    }),
+    I18nModule.forRoot({
+      fallbackLanguage: 'en',
+      loaderOptions: {
+        path: path.join(process.cwd(), 'src', 'i18n'),
+        watch: true,
+      },
+      resolvers: [
+        { use: AcceptLanguageResolver, options: { matchType: 'strict' } },
+      ],
     }),
     ScheduleModule.forRoot(),
     RedisModule,

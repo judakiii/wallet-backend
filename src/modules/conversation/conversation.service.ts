@@ -160,10 +160,22 @@ export class ConversationService {
     });
   }
 
-  async findConversationMessages(conversationId: string) {
-    return this.prisma.message.findMany({
+  async findConversationMessages(
+    conversationId: string,
+    query: { cursor?: string; limit?: number },
+  ) {
+    const limit = Number(query.limit) || 10;
+    const cursor = query.cursor;
+
+    const messages = await this.prisma.message.findMany({
       where: {
         conversationId,
+      },
+      take: limit + 1, // یکی بیشتر می‌گیریم تا بفهمیم صفحه بعدی وجود دارد یا نه
+      cursor: cursor ? { id: cursor } : undefined,
+      skip: cursor ? 1 : 0, // اگر کرسر داریم، خودِ پیامِ کرسر را رد کن
+      orderBy: {
+        createdAt: 'desc', // پیام‌های جدیدتر اول بیایند (برای چت استاندارد است)
       },
       include: {
         reactions: {
@@ -175,6 +187,18 @@ export class ConversationService {
         },
       },
     });
+
+    let nextCursor: string | undefined = undefined;
+    // اگر تعداد نتایج بیشتر از limit بود، یعنی صفحه بعدی وجود دارد
+    if (messages.length > limit) {
+      const nextItem = messages.pop(); // آخرین آیتم اضافه را بردار
+      nextCursor = nextItem?.id;
+    }
+
+    return {
+      data: messages,
+      nextCursor,
+    };
   }
 
   async updateMessage(conversationId: string, content: string) {
