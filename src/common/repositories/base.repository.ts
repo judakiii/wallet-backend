@@ -1,4 +1,8 @@
-import { IRepository, IPaginationResult, IPaginationParams } from '../interfaces/repository.interface';
+import {
+  IRepository,
+  IPaginationResult,
+  IPaginationParams,
+} from '../interfaces/repository.interface';
 import { PrismaService } from '../../prisma';
 import { Logger, NotFoundException } from '@nestjs/common';
 
@@ -29,7 +33,7 @@ export abstract class BaseRepository<T> implements IRepository<T> {
    */
   async findById(id: string): Promise<T | null> {
     this.logger.debug(`Finding ${this.modelName} by id: ${id}`);
-    
+
     const entity = await this.model.findUnique({
       where: { id },
     });
@@ -42,7 +46,7 @@ export abstract class BaseRepository<T> implements IRepository<T> {
    */
   async findByIdOrFail(id: string): Promise<T> {
     const entity = await this.findById(id);
-    
+
     if (!entity) {
       throw new NotFoundException(`${this.modelName} with id ${id} not found`);
     }
@@ -94,7 +98,7 @@ export abstract class BaseRepository<T> implements IRepository<T> {
    */
   async findOneOrFail(where: any, include?: any): Promise<T> {
     const entity = await this.findOne(where, include);
-    
+
     if (!entity) {
       throw new NotFoundException(`${this.modelName} not found`);
     }

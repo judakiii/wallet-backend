@@ -1,0 +1,9 @@
+{
+  "loginSuccessfully": "ورود با موفقیت انجام شد",
+  "logoutSuccessfully" : "خروج از حساب کاربری با موفقیت انجام شد",
+  "signUpSuccessfully": "ثبت‌نام با موفقیت انجام شد",
+  "connection": "اتصال برقرار است",
+  "findRecords": "رکوردها یافت شدند",
+  "findSuccessfully": "با موفقیت پیدا شد",
+  "updatedSuccessfully": "با موفقیت به‌روزرسانی شد"
+}

@@ -1,0 +1,10 @@
+{
+  "loginSuccessfully": "Login Successfully",
+  "logoutSuccessfully": "LogOut Successfully",
+  "signUpSuccessfully": "Sign Up Successfully",
+  "otpSent" : "OTP sent Sucessfully" , 
+  "connection": "Connection is OK",
+  "findRecords": "Records Found",
+  "findSuccessfully": "Found Successfully",
+  "updatedSuccessfully": "Updated Successfully"
+}

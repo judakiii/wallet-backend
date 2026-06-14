@@ -1,7 +1,13 @@
-import { defineConfig } from "prisma/config";
+import { defineConfig } from 'prisma/config';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 export default defineConfig({
   datasource: {
-      url: process.env.DATABASE_URL || "postgresql://mohammadreza:aa110110@localhost:5432/wallet_db?schema=public"
+    url:
+      process.env.DATABASE_URL ||
+      'postgresql://mohammadreza:aa110110@localhost:5432/wallet_db?schema=public',
   },
+  engine: 'classic',
 });

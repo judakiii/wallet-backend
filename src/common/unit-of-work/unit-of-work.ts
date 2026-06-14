@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
 import { IUnitOfWork } from '../interfaces/unit-of-work.interface';
+import { Prisma } from '@prisma/client';
 
 /**
  * Unit of Work Implementation
@@ -9,7 +10,7 @@ import { IUnitOfWork } from '../interfaces/unit-of-work.interface';
 @Injectable()
 export class UnitOfWork implements IUnitOfWork {
   private readonly logger = new Logger(UnitOfWork.name);
-  private transactionClient: any = null;
+  private transactionClient: Prisma.TransactionClient | null = null;
   private isActive = false;
   private repositories: Map<string, any> = new Map();
 
@@ -18,8 +19,13 @@ export class UnitOfWork implements IUnitOfWork {
   /**
    * Get the current transaction client (for repositories to use)
    */
-  getTransactionClient(): any {
-    return this.transactionClient || this.prisma;
+  getTransactionClient(): Prisma.TransactionClient {
+    if (!this.transactionClient) {
+      throw new Error(
+        'Transaction is not active — no transaction client available',
+      );
+    }
+    return this.transactionClient;
   }
 
   /**
@@ -79,17 +85,19 @@ export class UnitOfWork implements IUnitOfWork {
     this.logger.debug('Starting transaction execution');
 
     try {
-      const result = await this.prisma.$transaction(async (prismaTransaction) => {
-        // Set the transaction client
-        this.transactionClient = prismaTransaction;
-        this.isActive = true;
+      const result = await this.prisma.$transaction(
+        async (prismaTransaction) => {
+          // Set the transaction client
+          this.transactionClient = prismaTransaction;
+          this.isActive = true;
 
-        // Execute the work
-        const workResult = await work(this);
+          // Execute the work
+          const workResult = await work(this);
 
-        // If work completes successfully, Prisma will auto-commit
-        return workResult;
-      });
+          // If work completes successfully, Prisma will auto-commit
+          return workResult;
+        },
+      );
 
       this.logger.log('Transaction completed successfully');
       this.cleanup();
@@ -109,7 +117,11 @@ export class UnitOfWork implements IUnitOfWork {
     options?: {
       maxWait?: number; // Maximum time to wait for a transaction (ms)
       timeout?: number; // Maximum transaction duration (ms)
-      isolationLevel?: 'ReadUncommitted' | 'ReadCommitted' | 'RepeatableRead' | 'Serializable';
+      isolationLevel?:
+        | 'ReadUncommitted'
+        | 'ReadCommitted'
+        | 'RepeatableRead'
+        | 'Serializable';
     },
   ): Promise<T> {
     this.logger.debug('Starting transaction with options:', options);
@@ -149,7 +161,9 @@ export class UnitOfWork implements IUnitOfWork {
   getRepository<T>(name: string): T {
     const repository = this.repositories.get(name);
     if (!repository) {
-      throw new Error(`Repository ${name} not registered with this Unit of Work`);
+      throw new Error(
+        `Repository ${name} not registered with this Unit of Work`,
+      );
     }
     return repository as T;
   }
